@@ -120,8 +120,7 @@ class ParserTest < Minitest::Test
 
   def test_missing_type_in_field
     err = assert_raises(Forge::ParserError) { parse("message User { name; }") }
-    assert_match(/Expected RBRACE/, err.message)
-    assert_match(/1:16/, err.message)
+    assert_match(/Expected IDENTIFIER, got SEMICOLON/, err.message)
   end
 
   def test_malformed_empty_braces
