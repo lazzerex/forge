@@ -29,7 +29,8 @@
 | [**Schema Language**](#schema-language) | [**Architecture**](#architecture) |
 | [**Built-in Types**](#built-in-types) | [**Semantic Analyzer**](#semantic-analyzer) |
 | [**Grammar**](#grammar) | [**Symbol Table**](#symbol-table) |
-| [**Project Structure**](#project-structure) | [**Testing**](#testing) |
+| [**Haxe Generator**](#haxe-generator) | [**Project Structure**](#project-structure) |
+| [**Testing**](#testing) | |
 
 ---
 
@@ -65,7 +66,7 @@ name, terminated by a semicolon. Comments use `//` and are ignored by the lexer.
 Forge is a multi-phase compiler frontend. Each phase has a single responsibility:
 
 ```
-Source → Lexer → Tokens → Parser → AST → [Semantic Analysis] → [Code Generation]
+Source → Lexer → Tokens → Parser → AST → Semantic Analysis → Haxe Generator → Haxe Source
 ```
 
 ### Lexer
@@ -140,25 +141,74 @@ field         := TYPE IDENTIFIER ';'
 
 ---
 
+## Haxe Generator
+
+The first code-generation target. Consumes the target-independent AST and
+produces valid Haxe source code.
+
+```
+message User {
+    string id;
+    string name;
+    int age;
+    bool active;
+}
+```
+
+generates:
+
+```haxe
+class User {
+    public var id:String;
+    public var name:String;
+    public var age:Int;
+    public var active:Bool;
+
+    public function new() {
+    }
+}
+```
+
+### Type Mapping
+
+| Forge | Haxe |
+|-------|------|
+| `string` | `String` |
+| `int` | `Int` |
+| `float` | `Float` |
+| `bool` | `Bool` |
+
+The generator is built behind a `Generator` base class. Future targets
+(TypeScript, Go, Rust) subclass `Generator` and provide their own type
+mappings and output format without modifying the parser or AST.
+
+---
+
 ## Project Structure
 
 ```
 lib/
-  forge.rb                # Main entry point
+  forge.rb                    # Main entry point
   forge/
-    errors.rb             # LexerError, ParserError, SemanticError
-    token.rb              # Token struct
-    lexer.rb              # Hand-written lexer
-    ast.rb                # AST node classes
-    parser.rb             # Recursive-descent parser
-    semantic_analyzer.rb  # Semantic analysis + symbol table
-    version.rb            # Version constant
+    errors.rb                 # LexerError, ParserError, SemanticError
+    token.rb                  # Token struct
+    lexer.rb                  # Hand-written lexer
+    ast.rb                    # AST node classes
+    parser.rb                 # Recursive-descent parser
+    semantic_analyzer.rb      # Semantic analysis + symbol table
+    generator.rb              # Base generator abstraction
+    generators/
+      haxe.rb                 # Haxe code generator
+    verify.rb                 # Compile-check generated Haxe
+    version.rb                # Version constant
 test/
-  test_helper.rb          # Minitest setup
-  forge_test.rb           # Sanity tests
-  lexer_test.rb           # Lexer tests
-  parser_test.rb          # Parser tests
-  semantic_analyzer_test.rb  # Semantic analysis tests
+  test_helper.rb              # Minitest setup
+  forge_test.rb               # Sanity tests
+  lexer_test.rb               # Lexer tests
+  parser_test.rb              # Parser tests
+  semantic_analyzer_test.rb   # Semantic analysis tests
+  generator_test.rb           # Haxe generator tests
+  integration_test.rb         # Haxe compilation integration tests
 ```
 
 ---
@@ -173,7 +223,24 @@ bundle exec rake test
 
 Each phase includes its own test file. Lexer and parser tests cover both
 happy paths and error cases (malformed input, missing braces, missing
-semicolons, invalid declarations).
+semicolons, invalid declarations). Generator tests include end-to-end
+tests that run the full pipeline from source to generated output.
+
+Integration tests generate Haxe from schemas, compile them with
+`haxe --interp`, and verify the output runs correctly. These require
+Haxe to be installed.
+
+### Verify command
+
+Compile-check a schema's generated Haxe output:
+
+```bash
+bundle exec rake verify[schema.forge]
+```
+
+This runs the full pipeline (lexer → parser → semantic analysis → Haxe
+generator), writes the output to a temp directory, compiles with
+`haxe --interp`, and exits 0 on success, 1 on failure.
 
 ---
 
