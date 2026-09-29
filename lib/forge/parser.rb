@@ -44,13 +44,17 @@ module Forge
       name = expect(:IDENTIFIER)
       expect(:LBRACE)
       fields = []
-      fields << parse_field while peek.type == :TYPE
+      fields << parse_field while field_start?
       expect(:RBRACE)
       Message.new(name: name.value, fields: fields, line: kw.line, column: kw.column)
     end
 
+    def field_start?
+      peek.type == :TYPE || peek.type == :IDENTIFIER
+    end
+
     def parse_field
-      type_tok = expect(:TYPE)
+      type_tok = advance
       name_tok = expect(:IDENTIFIER)
       expect(:SEMICOLON)
       Field.new(name: name_tok.value, type_name: type_tok.value, line: type_tok.line, column: type_tok.column)
