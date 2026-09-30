@@ -12,8 +12,10 @@ module Forge
     RUNTIME_HEADER = "import forge.Runtime;\n"
 
     def generate(document)
+      parts = document.enums.map { |e| generate_enum(e) }
+      parts.concat(document.messages.map { |msg| generate_class(msg) })
       header = document.messages.empty? ? "" : RUNTIME_HEADER
-      header + document.messages.map { |msg| generate_class(msg) }.join("\n\n") + "\n"
+      header + parts.join("\n\n") + "\n"
     end
 
     private
@@ -78,6 +80,11 @@ module Forge
     def generate_field(field)
       haxe_type = TYPE_MAP[field.type_name] || field.type_name
       "public var #{field.name}:#{haxe_type};"
+    end
+
+    def generate_enum(enum)
+      values = enum.values.map { |v| "        var #{v} = \"#{v}\";" }.join("\n")
+      "enum abstract #{enum.name}(String) {\n#{values}\n}"
     end
   end
 end
