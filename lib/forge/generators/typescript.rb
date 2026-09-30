@@ -10,7 +10,9 @@ module Forge
     }.freeze
 
     def generate(document)
-      document.messages.map { |msg| generate_interface(msg) }.join("\n\n") + "\n"
+      parts = document.enums.map { |e| generate_enum(e) }
+      parts.concat(document.messages.map { |msg| generate_interface(msg) })
+      parts.join("\n\n") + "\n"
     end
 
     private
@@ -22,6 +24,11 @@ module Forge
         fields = message.fields.map { |f| "    #{f.name}: #{TYPE_MAP[f.type_name] || f.type_name};" }.join("\n")
         "export interface #{message.name} {\n#{fields}\n}"
       end
+    end
+
+    def generate_enum(enum)
+      values = enum.values.map { |v| "\"#{v}\"" }.join(" | ")
+      "export type #{enum.name} = #{values};"
     end
   end
 end
