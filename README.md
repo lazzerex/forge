@@ -230,7 +230,7 @@ the generator class knows its target language.
 
 ## CLI
 
-`exe/forge` provides the command-line interface. The compiler pipeline
+The Forge release includes a command-line executable. The compiler pipeline
 stays usable as a plain Ruby library — the CLI is a thin wrapper.
 
 ```bash
@@ -274,8 +274,6 @@ lib/
       typescript.rb           # TypeScript code generator
     verify.rb                 # Compile-check generated Haxe
     version.rb                # Version constant
-exe/
-  forge                       # CLI executable
 runtime/
   forge/
     Runtime.hx                # Haxe runtime helpers
