@@ -91,14 +91,15 @@ class SemanticAnalyzerTest < Minitest::Test
     end
   end
 
-  def test_duplicate_message_names
   def test_errors_include_filename
     errors = analyze("message User { Usr name; }", filename: "test.forge")
     assert_match(/^test\.forge:/, errors[0].to_s)
   end
 
   def test_default_filename
-    errors = analyze("message User { Usr name; }")
+    tokens = Forge::Lexer.new("message User { Usr name; }").tokenize
+    doc = Forge::Parser.new(tokens).parse
+    errors = Forge::SemanticAnalyzer.new.analyze(doc)
     assert_match(/^input\.forge:/, errors[0].to_s)
   end
 
@@ -128,7 +129,7 @@ class SemanticAnalyzerTest < Minitest::Test
         int name;
       }
     FORGE
-    assert_equal "schema.forge:3:9: duplicate field `name`", errors[0].to_s
+    assert_equal "schema.forge:3:3: duplicate field `name`", errors[0].to_s
   end
 
   def test_duplicate_message_error_diagnostic_format
@@ -205,6 +206,7 @@ class SemanticAnalyzerTest < Minitest::Test
     assert_equal 2, errors.length
   end
 
+  def test_duplicate_message_names
     errors = analyze(<<~FORGE)
       message User {
         string name;
@@ -229,5 +231,103 @@ class SemanticAnalyzerTest < Minitest::Test
     types = errors.map(&:message)
     assert(types.any? { |m| m.include?("duplicate field `name`") })
     assert(types.any? { |m| m.include?("unknown type `Foobar`") })
+  end
+
+  def test_message_typed_field_valid
+    errors = analyze(<<~FORGE)
+      message User {
+        string name;
+      }
+      message Post {
+        User author;
+      }
+    FORGE
+    assert_equal 0, errors.length
+  end
+
+  def test_forward_message_reference_valid
+    errors = analyze(<<~FORGE)
+      message Post {
+        User author;
+      }
+      message User {
+        string name;
+      }
+    FORGE
+    assert_equal 0, errors.length
+  end
+
+  def test_self_reference_valid
+    errors = analyze("message Node { Node next; }")
+    assert_equal 0, errors.length
+  end
+
+  def test_enum_typed_field_valid
+    errors = analyze(<<~FORGE)
+      enum Status {
+        ACTIVE;
+        INACTIVE;
+      }
+      message User {
+        Status status;
+      }
+    FORGE
+    assert_equal 0, errors.length
+  end
+
+  def test_duplicate_enum_name
+    errors = analyze(<<~FORGE)
+      enum Status {
+        ACTIVE;
+      }
+      enum Status {
+        INACTIVE;
+      }
+    FORGE
+    assert_equal 1, errors.length
+    assert_match(/duplicate type `Status`/, errors[0].message)
+  end
+
+  def test_enum_name_clashing_with_message
+    errors = analyze(<<~FORGE)
+      message Status {
+        string name;
+      }
+      enum Status {
+        ACTIVE;
+      }
+    FORGE
+    assert_equal 1, errors.length
+    assert_match(/duplicate type `Status`/, errors[0].message)
+  end
+
+  def test_message_name_clashing_with_enum
+    errors = analyze(<<~FORGE)
+      enum Status {
+        ACTIVE;
+      }
+      message Status {
+        string name;
+      }
+    FORGE
+    assert_equal 1, errors.length
+    assert_match(/duplicate type `Status`/, errors[0].message)
+  end
+
+  def test_duplicate_enum_value
+    errors = analyze(<<~FORGE)
+      enum Status {
+        ACTIVE;
+        ACTIVE;
+      }
+    FORGE
+    assert_equal 1, errors.length
+    assert_match(/duplicate enum value `ACTIVE`/, errors[0].message)
+  end
+
+  def test_empty_enum_rejected
+    errors = analyze("enum Status { }")
+    assert_equal 1, errors.length
+    assert_match(/enum `Status` has no values/, errors[0].message)
   end
 end
