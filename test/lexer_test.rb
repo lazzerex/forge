@@ -173,4 +173,17 @@ class LexerTest < Minitest::Test
     tokens = Forge::Lexer.new("").tokenize
     assert_equal 1, tokens.length
   end
+
+  def test_enum_keyword
+    tokens = Forge::Lexer.new("enum").tokenize
+    assert_equal :KEYWORD, tokens[0].type
+    assert_equal "enum", tokens[0].value
+  end
+
+  def test_enum_declaration_tokens
+    tokens = Forge::Lexer.new("enum Status { ACTIVE; }").tokenize
+    assert_equal [:KEYWORD, :IDENTIFIER, :LBRACE, :IDENTIFIER, :SEMICOLON, :RBRACE, :EOF], tokens.map(&:type)
+    assert_equal "Status", tokens[1].value
+    assert_equal "ACTIVE", tokens[3].value
+  end
 end
