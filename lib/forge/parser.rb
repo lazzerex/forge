@@ -9,8 +9,16 @@ module Forge
 
     def parse
       messages = []
-      messages << parse_message until at_end?
-      Document.new(messages)
+      enums = []
+      until at_end?
+        tok = peek
+        if tok.type == :KEYWORD && tok.value == "enum"
+          enums << parse_enum
+        else
+          messages << parse_message
+        end
+      end
+      Document.new(messages, enums)
     end
 
     private
@@ -58,6 +66,22 @@ module Forge
       name_tok = expect(:IDENTIFIER)
       expect(:SEMICOLON)
       Field.new(name: name_tok.value, type_name: type_tok.value, line: type_tok.line, column: type_tok.column)
+    end
+
+    def parse_enum
+      kw = expect(:KEYWORD)
+      name = expect(:IDENTIFIER)
+      expect(:LBRACE)
+      values = []
+      values << parse_enum_value while peek.type == :IDENTIFIER
+      expect(:RBRACE)
+      Enum.new(name: name.value, values: values, line: kw.line, column: kw.column)
+    end
+
+    def parse_enum_value
+      tok = expect(:IDENTIFIER)
+      expect(:SEMICOLON)
+      tok.value
     end
   end
 end
