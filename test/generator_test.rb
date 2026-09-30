@@ -159,4 +159,42 @@ class HaxeGeneratorTest < Minitest::Test
     output = Forge::HaxeGenerator.new.generate(doc)
     refute_includes output, "import forge.Runtime;"
   end
+
+  def test_enum_output
+    output = generate(<<~FORGE)
+      enum Status {
+        ACTIVE;
+        INACTIVE;
+      }
+    FORGE
+    assert_includes output, "enum abstract Status(String) {"
+    assert_includes output, "var ACTIVE = \"ACTIVE\";"
+    assert_includes output, "var INACTIVE = \"INACTIVE\";"
+    refute_includes output, "import forge.Runtime;"
+  end
+
+  def test_message_typed_field
+    output = generate(<<~FORGE)
+      message User {
+        string name;
+      }
+      message Post {
+        User author;
+      }
+    FORGE
+    assert_includes output, "public var author:User;"
+  end
+
+  def test_enum_field
+    output = generate(<<~FORGE)
+      enum Status {
+        ACTIVE;
+      }
+      message User {
+        Status status;
+      }
+    FORGE
+    assert_includes output, "enum abstract Status(String) {"
+    assert_includes output, "public var status:Status;"
+  end
 end
