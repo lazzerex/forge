@@ -4,7 +4,8 @@ module Forge
   class CLI
     TARGETS = {
       "haxe" => { generator: HaxeGenerator, ext: "hx" },
-      "typescript" => { generator: TypeScriptGenerator, ext: "ts" }
+      "typescript" => { generator: TypeScriptGenerator, ext: "ts" },
+      "go" => { generator: GoGenerator, ext: "go" }
     }.freeze
 
     def initialize(argv, stdout: $stdout, stderr: $stderr)
@@ -65,6 +66,9 @@ module Forge
         FileUtils.mkdir_p(out)
         doc.messages.each do |msg|
           File.write(File.join(out, "#{msg.name}.#{entry[:ext]}"), generator.generate(Document.new([msg])))
+        end
+        doc.enums.each do |enum|
+          File.write(File.join(out, "#{enum.name}.#{entry[:ext]}"), generator.generate(Document.new([], [enum])))
         end
       else
         @stdout.print generator.generate(doc)
