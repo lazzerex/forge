@@ -128,4 +128,39 @@ class TypeScriptGeneratorTest < Minitest::Test
     assert_includes haxe, "public var name:String;"
     assert_includes ts, "name: string;"
   end
+
+  def test_enum_output
+    output = generate(<<~FORGE)
+      enum Status {
+        ACTIVE;
+        INACTIVE;
+      }
+    FORGE
+    assert_includes output, "export type Status = \"ACTIVE\" | \"INACTIVE\";"
+  end
+
+  def test_message_typed_field
+    output = generate(<<~FORGE)
+      message User {
+        string name;
+      }
+      message Post {
+        User author;
+      }
+    FORGE
+    assert_includes output, "author: User;"
+  end
+
+  def test_enum_field
+    output = generate(<<~FORGE)
+      enum Status {
+        ACTIVE;
+      }
+      message User {
+        Status status;
+      }
+    FORGE
+    assert_includes output, "export type Status = \"ACTIVE\";"
+    assert_includes output, "status: Status;"
+  end
 end
