@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - uses: krdlab/setup-haxe@v1
+        with:
+          haxe-version: 4.3.3
+
+      - name: Run tests
+        run: bundle exec rake test
+
+      - name: CLI smoke
+        run: |
+          forge() { ruby -Ilib -r forge -e 'exit Forge::CLI.new(ARGV).run' "$@"; }
+          cat > /tmp/ci_smoke.forge <<'EOF'
+          message User {
+              string id;
+              string name;
+              int age;
+              bool active;
+          }
+          EOF
+          forge check /tmp/ci_smoke.forge
+          forge generate /tmp/ci_smoke.forge --target haxe --out /tmp/ci_gen_hx
+          forge generate /tmp/ci_smoke.forge --target typescript --out /tmp/ci_gen_ts
+          test -f /tmp/ci_gen_hx/User.hx
+          test -f /tmp/ci_gen_ts/User.ts
