@@ -1,9 +1,10 @@
 module Forge
   class Document
-    attr_reader :messages
+    attr_reader :messages, :enums
 
-    def initialize(messages)
+    def initialize(messages, enums = [])
       @messages = messages
+      @enums = enums
     end
   end
 
@@ -24,6 +25,17 @@ module Forge
     def initialize(name:, type_name:, line:, column:)
       @name = name
       @type_name = type_name
+      @line = line
+      @column = column
+    end
+  end
+
+  class Enum
+    attr_reader :name, :values, :line, :column
+
+    def initialize(name:, values:, line:, column:)
+      @name = name
+      @values = values
       @line = line
       @column = column
     end
