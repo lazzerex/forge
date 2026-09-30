@@ -6,6 +6,7 @@ module Forge
 
     def initialize
       @messages = {}
+      @enums = {}
       @types = KNOWN_TYPES.dup
     end
 
@@ -13,12 +14,20 @@ module Forge
       @messages[message.name] = message
     end
 
+    def add_enum(enum)
+      @enums[enum.name] = enum
+    end
+
     def message?(name)
       @messages.key?(name)
     end
 
+    def enum?(name)
+      @enums.key?(name)
+    end
+
     def known_type?(name)
-      @types.include?(name)
+      @types.include?(name) || @messages.key?(name) || @enums.key?(name)
     end
 
     def add_type(name)
@@ -41,10 +50,9 @@ module Forge
       @errors = []
       @symbol_table = SymbolTable.new
 
-      document.messages.each do |message|
-        register_message(message)
-        check_fields(message)
-      end
+      document.messages.each { |m| register_message(m) }
+      document.enums.each { |e| register_enum(e) }
+      document.messages.each { |m| check_fields(m) }
 
       @errors
     end
@@ -56,7 +64,7 @@ module Forge
     private
 
     def register_message(message)
-      if @symbol_table.message?(message.name)
+      if @symbol_table.message?(message.name) || @symbol_table.enum?(message.name)
         @errors << error(
           "duplicate message `#{message.name}`",
           line: message.line,
@@ -64,6 +72,35 @@ module Forge
         )
       end
       @symbol_table.add_message(message)
+    end
+
+    def register_enum(enum)
+      if @symbol_table.message?(enum.name) || @symbol_table.enum?(enum.name)
+        @errors << error(
+          "duplicate type `#{enum.name}`",
+          line: enum.line,
+          column: enum.column
+        )
+      end
+      if enum.values.empty?
+        @errors << error(
+          "enum `#{enum.name}` has no values",
+          line: enum.line,
+          column: enum.column
+        )
+      end
+      seen = {}
+      enum.values.each do |v|
+        if seen.key?(v)
+          @errors << error(
+            "duplicate enum value `#{v}`",
+            line: enum.line,
+            column: enum.column
+          )
+        end
+        seen[v] = true
+      end
+      @symbol_table.add_enum(enum)
     end
 
     def check_fields(message)
