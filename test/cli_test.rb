@@ -176,6 +176,7 @@ class CLITest < Minitest::Test
     assert_includes out, "Usage: forge"
     assert_includes out, "haxe"
     assert_includes out, "typescript"
+    assert_includes out, "go"
   end
 
   def test_no_args_shows_help
@@ -188,5 +189,71 @@ class CLITest < Minitest::Test
     code, _out, err = run_cli(["frobnicate"])
     assert_equal 1, code
     assert_includes err, "Unknown command"
+  end
+
+  def test_generate_stdout_go
+    with_schema(VALID) do |path, _dir|
+      code, out, = run_cli(["generate", path, "--target", "go"])
+      assert_equal 0, code
+      assert_includes out, "package schema"
+      assert_includes out, "type User struct {"
+      assert_includes out, "Name string `json:\"name\"`"
+    end
+  end
+
+  def test_generate_writes_go_files
+    with_schema(VALID) do |path, dir|
+      out_dir = File.join(dir, "generated")
+      code, = run_cli(["generate", path, "--target", "go", "--out", out_dir])
+      assert_equal 0, code
+      file = File.join(out_dir, "User.go")
+      assert File.exist?(file)
+      assert_includes File.read(file), "type User struct {"
+    end
+  end
+
+  def test_check_message_typed_field
+    with_schema("message Post { User author; }\nmessage User { string name; }\n") do |path, _dir|
+      code, _out, err = run_cli(["check", path])
+      assert_equal 0, code
+      assert_equal "", err
+    end
+  end
+
+  def test_check_enum_schema
+    with_schema("enum Status { ACTIVE; }\nmessage User { Status status; }\n") do |path, _dir|
+      code, _out, err = run_cli(["check", path])
+      assert_equal 0, code
+      assert_equal "", err
+    end
+  end
+
+  def test_check_reports_enum_errors
+    with_schema("enum Status { }\n") do |path, _dir|
+      code, _out, err = run_cli(["check", path])
+      assert_equal 1, code
+      assert_includes err, "has no values"
+    end
+  end
+
+  def test_generate_writes_enum_files
+    with_schema("enum Status { ACTIVE; }\nmessage User { Status status; }\n") do |path, dir|
+      out_dir = File.join(dir, "generated")
+      code, = run_cli(["generate", path, "--target", "typescript", "--out", out_dir])
+      assert_equal 0, code
+      assert File.exist?(File.join(out_dir, "Status.ts"))
+      assert File.exist?(File.join(out_dir, "User.ts"))
+      assert_includes File.read(File.join(out_dir, "Status.ts")), "export type Status = \"ACTIVE\";"
+    end
+  end
+
+  def test_generate_stdout_go_with_enum
+    with_schema("enum Status { ACTIVE; }\nmessage User { Status status; }\n") do |path, _dir|
+      code, out, = run_cli(["generate", path, "--target", "go"])
+      assert_equal 0, code
+      assert_includes out, "type Status string"
+      assert_includes out, "StatusACTIVE Status = \"ACTIVE\""
+      assert_includes out, "Status Status `json:\"status\"`"
+    end
   end
 end
