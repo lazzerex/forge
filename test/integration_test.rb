@@ -229,6 +229,57 @@ class HaxeIntegrationTest < Minitest::Test
     end
   end
 
+  def test_enum_schema_compiles
+    Dir.mktmpdir do |dir|
+      tokens = Forge::Lexer.new("enum Status { ACTIVE; INACTIVE; }").tokenize
+      doc = Forge::Parser.new(tokens).parse
+      errors = Forge::SemanticAnalyzer.new("test.forge").analyze(doc)
+      assert_equal 0, errors.length
+      File.write("#{dir}/Status.hx", Forge::HaxeGenerator.new.generate(doc))
+      File.write("#{dir}/Main.hx", <<~HAXE)
+        class Main {
+            static function main() {
+                var s:Status = Status.ACTIVE;
+                trace(Std.string(s));
+            }
+        }
+      HAXE
+      assert compile_and_run(dir), "Enum schema failed to compile"
+    end
+  end
+
+  def test_message_typed_field_compiles
+    Dir.mktmpdir do |dir|
+      tokens = Forge::Lexer.new(<<~FORGE).tokenize
+        message User {
+          string name;
+        }
+        message Post {
+          User author;
+        }
+      FORGE
+      doc = Forge::Parser.new(tokens).parse
+      errors = Forge::SemanticAnalyzer.new("test.forge").analyze(doc)
+      assert_equal 0, errors.length
+      gen = Forge::HaxeGenerator.new
+      doc.messages.each do |msg|
+        File.write("#{dir}/#{msg.name}.hx", gen.generate(Forge::Document.new([msg])))
+      end
+      File.write("#{dir}/Main.hx", <<~HAXE)
+        class Main {
+            static function main() {
+                var user = new User();
+                user.name = "alice";
+                var post = new Post();
+                post.author = user;
+                trace(post.author.name);
+            }
+        }
+      HAXE
+      assert compile_and_run(dir), "Message-typed field failed to compile"
+    end
+  end
+
   private
 
   def generate_haxe(source)
