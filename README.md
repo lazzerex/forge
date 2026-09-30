@@ -8,14 +8,18 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Ruby-3.x-CC342D?logo=ruby&logoColor=white" alt="Ruby 3.x" />
+  <img src="https://img.shields.io/badge/Lexer-6B4C9A" alt="Lexer" />
   <img src="https://img.shields.io/badge/Parser-Recursive--Descent-blue" alt="Recursive Descent" />
-  <img src="https://img.shields.io/badge/Lexer-Hand--written-6B4C9A" alt="Hand-written Lexer" />
-  <img src="https://img.shields.io/badge/Targets-Haxe%20%7C%20TypeScript-FF681F?label=codegen" alt="Haxe + TypeScript" />
+  <img src="https://img.shields.io/badge/Testing-Minitest-CC342D?logo=ruby&logoColor=white" alt="Minitest" />
+  <img src="https://img.shields.io/badge/Build-Rake-CC342D?logo=rake&logoColor=white" alt="Rake" />
+  <img src="https://img.shields.io/badge/Target-Haxe-FF681F?logo=haxe&logoColor=white" alt="Haxe" />
+  <img src="https://img.shields.io/badge/Target-TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
 </p>
 
 <p align="center">
   <a href="#schema-language">Schema Language</a> ·
   <a href="#architecture">Architecture</a> ·
+  <a href="#cli">CLI</a> ·
   <a href="#project-structure">Structure</a> ·
   <a href="#testing">Testing</a>
 </p>
@@ -29,7 +33,8 @@
 | [**Schema Language**](#schema-language) | [**Architecture**](#architecture) |
 | [**Built-in Types**](#built-in-types) | [**Semantic Analyzer**](#semantic-analyzer) |
 | [**Grammar**](#grammar) | [**Symbol Table**](#symbol-table) |
-| [**Haxe Generator**](#haxe-generator) | [**Project Structure**](#project-structure) |
+| [**Haxe Generator**](#haxe-generator) | [**TypeScript Generator**](#typescript-generator) |
+| [**CLI**](#cli) | [**Project Structure**](#project-structure) |
 | [**Testing**](#testing) | |
 
 ---
@@ -66,7 +71,7 @@ name, terminated by a semicolon. Comments use `//` and are ignored by the lexer.
 Forge is a multi-phase compiler frontend. Each phase has a single responsibility:
 
 ```
-Source → Lexer → Tokens → Parser → AST → Semantic Analysis → Haxe Generator → Haxe Source
+Source → Lexer → Tokens → Parser → AST → Semantic Analysis → Generators → Haxe Source | TypeScript Source
 ```
 
 ### Lexer
@@ -178,9 +183,75 @@ class User {
 | `float` | `Float` |
 | `bool` | `Bool` |
 
-The generator is built behind a `Generator` base class. Future targets
-(TypeScript, Go, Rust) subclass `Generator` and provide their own type
-mappings and output format without modifying the parser or AST.
+The generator is built behind a `Generator` base class. The TypeScript
+generator subclasses it, and future targets (Go, Rust) can do the same,
+providing their own type mappings and output format without modifying the
+parser or AST.
+
+---
+
+## TypeScript Generator
+
+Second code-generation target. Consumes the same target-independent AST —
+no TypeScript-specific parser or AST nodes exist.
+
+```
+message User {
+    string id;
+    string name;
+    int age;
+}
+```
+
+generates:
+
+```typescript
+export interface User {
+    id: string;
+    name: string;
+    age: number;
+}
+```
+
+### Type Mapping
+
+| Forge | TypeScript |
+|-------|------------|
+| `string` | `string` |
+| `int` | `number` |
+| `float` | `number` |
+| `bool` | `boolean` |
+
+Output is idiomatic TypeScript (`export interface`), not a mechanical
+translation of the Haxe output. The same AST drives both generators; only
+the generator class knows its target language.
+
+---
+
+## CLI
+
+`exe/forge` provides the command-line interface. The compiler pipeline
+stays usable as a plain Ruby library — the CLI is a thin wrapper.
+
+```bash
+forge check schema.forge
+
+forge generate schema.forge --target haxe
+forge generate schema.forge --target haxe --out generated/
+forge generate schema.forge --target typescript --out generated/
+
+forge version
+forge help
+```
+
+Behavior:
+
+* `check` runs lexer, parser, and semantic analysis. Prints diagnostics
+  for lexer, parser, and semantic errors with source locations.
+* `generate` validates first. No files are written when validation fails.
+* With `--out`, writes one file per message (`User.hx`, `User.ts`). Without
+  it, prints generated code to stdout.
+* Exit code `0` on success, `1` on any error.
 
 ---
 
@@ -190,6 +261,7 @@ mappings and output format without modifying the parser or AST.
 lib/
   forge.rb                    # Main entry point
   forge/
+    cli.rb                    # Command-line interface
     errors.rb                 # LexerError, ParserError, SemanticError
     token.rb                  # Token struct
     lexer.rb                  # Hand-written lexer
@@ -199,8 +271,14 @@ lib/
     generator.rb              # Base generator abstraction
     generators/
       haxe.rb                 # Haxe code generator
+      typescript.rb           # TypeScript code generator
     verify.rb                 # Compile-check generated Haxe
     version.rb                # Version constant
+exe/
+  forge                       # CLI executable
+runtime/
+  forge/
+    Runtime.hx                # Haxe runtime helpers
 test/
   test_helper.rb              # Minitest setup
   forge_test.rb               # Sanity tests
@@ -208,6 +286,8 @@ test/
   parser_test.rb              # Parser tests
   semantic_analyzer_test.rb   # Semantic analysis tests
   generator_test.rb           # Haxe generator tests
+  typescript_test.rb          # TypeScript generator tests
+  cli_test.rb                 # CLI tests
   integration_test.rb         # Haxe compilation integration tests
 ```
 
@@ -224,7 +304,12 @@ bundle exec rake test
 Each phase includes its own test file. Lexer and parser tests cover both
 happy paths and error cases (malformed input, missing braces, missing
 semicolons, invalid declarations). Generator tests include end-to-end
-tests that run the full pipeline from source to generated output.
+tests that run the full pipeline from source to generated output for both
+the Haxe and TypeScript targets.
+
+CLI tests cover `check` and `generate` for both targets: exit codes,
+diagnostics, file writing, and the guarantee that no files are written
+when validation fails.
 
 Integration tests generate Haxe from schemas, compile them with
 `haxe --interp`, and verify the output runs correctly. These require
