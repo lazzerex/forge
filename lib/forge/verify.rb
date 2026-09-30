@@ -22,8 +22,12 @@ module Forge
 
       Dir.mktmpdir do |dir|
         FileUtils.cp_r(RUNTIME_PATH, "#{dir}/runtime")
+        generator = HaxeGenerator.new
         doc.messages.each do |msg|
-          File.write("#{dir}/#{msg.name}.hx", haxe_output_for(msg))
+          File.write("#{dir}/#{msg.name}.hx", generator.generate(Document.new([msg])))
+        end
+        doc.enums.each do |enum|
+          File.write("#{dir}/#{enum.name}.hx", generator.generate(Document.new([], [enum])))
         end
         File.write("#{dir}/Main.hx", main_haxe(doc))
 
@@ -34,67 +38,6 @@ module Forge
     end
 
     private
-
-    def haxe_output_for(message)
-      if message.fields.empty?
-        <<~HAXE.strip
-          import forge.Runtime;
-
-          class #{message.name} {
-              public function new() {
-              }
-
-              public function toString():String {
-                  return Runtime.toString(this, "#{message.name}");
-              }
-
-              public function toJson():Dynamic {
-                  return Runtime.toJson(this);
-              }
-
-              public static function fromJson(json:Dynamic):#{message.name} {
-                  var obj = new #{message.name}();
-                  Runtime.fromJson(obj, json);
-                  return obj;
-              }
-
-              public function serialize():String {
-                  return Runtime.serialize(this);
-              }
-          }
-        HAXE
-      else
-        fields = message.fields.map { |f| "        public var #{f.name}:#{Forge::HaxeGenerator::TYPE_MAP[f.type_name] || f.type_name};" }.join("\n")
-        <<~HAXE.strip
-          import forge.Runtime;
-
-          class #{message.name} {
-          #{fields}
-
-              public function new() {
-              }
-
-              public function toString():String {
-                  return Runtime.toString(this, "#{message.name}");
-              }
-
-              public function toJson():Dynamic {
-                  return Runtime.toJson(this);
-              }
-
-              public static function fromJson(json:Dynamic):#{message.name} {
-                  var obj = new #{message.name}();
-                  Runtime.fromJson(obj, json);
-                  return obj;
-              }
-
-              public function serialize():String {
-                  return Runtime.serialize(this);
-              }
-          }
-        HAXE
-      end
-    end
 
     def main_haxe(doc)
       msg = doc.messages.first
