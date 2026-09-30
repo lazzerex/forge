@@ -186,4 +186,50 @@ class ParserTest < Minitest::Test
     refute msg.respond_to?(:to_haxe)
     refute msg.fields[0].respond_to?(:to_haxe)
   end
+
+  def test_enum_declaration
+    doc = parse("enum Status { ACTIVE; INACTIVE; }")
+    assert_equal 0, doc.messages.length
+    assert_equal 1, doc.enums.length
+    enum = doc.enums[0]
+    assert_equal "Status", enum.name
+    assert_equal %w[ACTIVE INACTIVE], enum.values
+    assert_equal 1, enum.line
+    assert_equal 1, enum.column
+  end
+
+  def test_enum_and_messages
+    doc = parse(<<~FORGE)
+      enum Status {
+        ACTIVE;
+      }
+      message User {
+        string name;
+      }
+    FORGE
+    assert_equal 1, doc.enums.length
+    assert_equal 1, doc.messages.length
+  end
+
+  def test_empty_enum_values
+    doc = parse("enum Status { }")
+    assert_equal [], doc.enums[0].values
+  end
+
+  def test_enum_missing_semicolon
+    err = assert_raises(Forge::ParserError) { parse("enum Status { ACTIVE }") }
+    assert_match(/Expected SEMICOLON/, err.message)
+  end
+
+  def test_enum_missing_name
+    err = assert_raises(Forge::ParserError) { parse("enum { ACTIVE; }") }
+    assert_match(/Expected IDENTIFIER/, err.message)
+  end
+
+  def test_enum_node_target_independent
+    doc = parse("enum Status { ACTIVE; }")
+    enum = doc.enums[0]
+    assert_instance_of Forge::Enum, enum
+    refute enum.respond_to?(:to_haxe)
+  end
 end
