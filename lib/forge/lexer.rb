@@ -2,7 +2,7 @@ require_relative "token"
 
 module Forge
   class Lexer
-    KEYWORDS = { "message" => :KEYWORD }.freeze
+    KEYWORDS = { "message" => :KEYWORD, "enum" => :KEYWORD }.freeze
     TYPES = %w[string int float bool].freeze
 
     def initialize(source)
