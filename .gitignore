@@ -1,9 +1,12 @@
 *.gem
 *.rbc
+.DS_Store
 .bundle
 .config
 coverage
 doc/
+generated/
+.yardoc/
 pkg/
 spec/reports/
 test/tmp/
