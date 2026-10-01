@@ -105,4 +105,19 @@ class GoGeneratorTest < Minitest::Test
     output = generate("message User { string name; }")
     refute_includes output, "export interface"
   end
+
+  def test_optional_field
+    output = generate("message User { int age?; }")
+    assert_includes output, "Age *int `json:\"age,omitempty\"`"
+  end
+
+  def test_array_field
+    output = generate("message User { string[] tags; }")
+    assert_includes output, "Tags []string `json:\"tags\"`"
+  end
+
+  def test_map_field
+    output = generate("message User { map<string, int> scores; }")
+    assert_includes output, "Scores map[string]int `json:\"scores\"`"
+  end
 end
