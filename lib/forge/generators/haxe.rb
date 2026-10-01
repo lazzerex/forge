@@ -78,8 +78,16 @@ module Forge
     end
 
     def generate_field(field)
-      haxe_type = TYPE_MAP[field.type_name] || field.type_name
-      "public var #{field.name}:#{haxe_type};"
+      "public var #{field.name}:#{haxe_type(field.type, field.optional)};"
+    end
+
+    def haxe_type(type, optional)
+      rendered = case type.kind
+      when :array then "Array<#{haxe_type(type.element, false)}>"
+      when :map then "Map<#{haxe_type(type.key_type, false)}, #{haxe_type(type.value_type, false)}>"
+      else TYPE_MAP[type.name] || type.name
+      end
+      optional ? "Null<#{rendered}>" : rendered
     end
 
     def generate_enum(enum)
