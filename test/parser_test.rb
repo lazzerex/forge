@@ -232,4 +232,74 @@ class ParserTest < Minitest::Test
     assert_instance_of Forge::Enum, enum
     refute enum.respond_to?(:to_haxe)
   end
+
+  def test_optional_field
+    doc = parse("message User { int age?; }")
+    field = doc.messages[0].fields[0]
+    assert_equal "age", field.name
+    assert field.optional
+    assert_equal "int", field.type_name
+    assert field.type.named?
+  end
+
+  def test_non_optional_field_default
+    doc = parse("message User { int age; }")
+    refute doc.messages[0].fields[0].optional
+  end
+
+  def test_array_field
+    doc = parse("message User { string[] tags; }")
+    field = doc.messages[0].fields[0]
+    assert field.type.array?
+    assert_equal "string", field.type.element.name
+  end
+
+  def test_map_field
+    doc = parse("message User { map<string, int> scores; }")
+    field = doc.messages[0].fields[0]
+    assert field.type.map?
+    assert_equal "string", field.type.key_type.name
+    assert_equal "int", field.type.value_type.name
+  end
+
+  def test_array_of_message_field
+    doc = parse("message User { Post[] posts; }")
+    field = doc.messages[0].fields[0]
+    assert field.type.array?
+    assert_equal "Post", field.type.element.name
+  end
+
+  def test_import_declaration
+    doc = parse("import \"user.forge\";
+message User { string name; }")
+    assert_equal 1, doc.imports.length
+    assert_equal "user.forge", doc.imports[0].path
+    assert_equal 1, doc.imports[0].line
+    assert_equal 1, doc.messages.length
+  end
+
+  def test_import_missing_string
+    err = assert_raises(Forge::ParserError) { parse("import user;") }
+    assert_match(/Expected STRING/, err.message)
+  end
+
+  def test_import_missing_semicolon
+    err = assert_raises(Forge::ParserError) { parse("import \"user.forge\"") }
+    assert_match(/Expected SEMICOLON/, err.message)
+  end
+
+  def test_map_missing_comma
+    err = assert_raises(Forge::ParserError) { parse("message User { map<string int> x; }") }
+    assert_match(/Expected COMMA/, err.message)
+  end
+
+  def test_map_missing_gt
+    err = assert_raises(Forge::ParserError) { parse("message User { map<string, int x; }") }
+    assert_match(/Expected GT/, err.message)
+  end
+
+  def test_array_missing_rbracket
+    err = assert_raises(Forge::ParserError) { parse("message User { string[ x; }") }
+    assert_match(/Expected RBRACKET/, err.message)
+  end
 end
