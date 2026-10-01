@@ -70,6 +70,7 @@ jobs:
 
       - name: CLI smoke
         run: |
+          forge() { ruby -Ilib -r forge -e 'exit Forge::CLI.new(ARGV).run' "$@"; }
           forge version
           cat > /tmp/ci_smoke.forge <<'EOF'
           enum Status {
