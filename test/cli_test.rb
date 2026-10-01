@@ -144,7 +144,7 @@ class CLITest < Minitest::Test
 
   def test_generate_unknown_target
     with_schema(VALID) do |path, _dir|
-      code, _out, err = run_cli(["generate", path, "--target", "rust"])
+      code, _out, err = run_cli(["generate", path, "--target", "cobol"])
       assert_equal 1, code
       assert_includes err, "unknown target"
     end
@@ -177,6 +177,7 @@ class CLITest < Minitest::Test
     assert_includes out, "haxe"
     assert_includes out, "typescript"
     assert_includes out, "go"
+    assert_includes out, "rust"
   end
 
   def test_no_args_shows_help
@@ -254,6 +255,26 @@ class CLITest < Minitest::Test
       assert_includes out, "type Status string"
       assert_includes out, "StatusACTIVE Status = \"ACTIVE\""
       assert_includes out, "Status Status `json:\"status\"`"
+    end
+  end
+  def test_generate_stdout_rust
+    with_schema(VALID) do |path, _dir|
+      code, out, = run_cli(["generate", path, "--target", "rust"])
+      assert_equal 0, code
+      assert_includes out, "pub struct User {"
+      assert_includes out, "pub name: String,"
+      assert_includes out, "pub age: i32,"
+    end
+  end
+
+  def test_generate_writes_rust_files
+    with_schema(VALID) do |path, dir|
+      out_dir = File.join(dir, "generated")
+      code, = run_cli(["generate", path, "--target", "rust", "--out", out_dir])
+      assert_equal 0, code
+      file = File.join(out_dir, "User.rs")
+      assert File.exist?(file)
+      assert_includes File.read(file), "pub struct User {"
     end
   end
 end
