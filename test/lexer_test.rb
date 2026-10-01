@@ -186,4 +186,37 @@ class LexerTest < Minitest::Test
     assert_equal "Status", tokens[1].value
     assert_equal "ACTIVE", tokens[3].value
   end
+
+  def test_question_mark_token
+    tokens = Forge::Lexer.new("?").tokenize
+    assert_equal [:QUESTION, :EOF], tokens.map(&:type)
+  end
+
+  def test_brackets_angle_brackets_comma
+    tokens = Forge::Lexer.new("[ ] < > ,").tokenize
+    assert_equal [:LBRACKET, :RBRACKET, :LT, :GT, :COMMA, :EOF], tokens.map(&:type)
+  end
+
+  def test_string_literal
+    tokens = Forge::Lexer.new("\"user.forge\"").tokenize
+    assert_equal [:STRING, :EOF], tokens.map(&:type)
+    assert_equal "user.forge", tokens[0].value
+  end
+
+  def test_unterminated_string_raises
+    err = assert_raises(Forge::LexerError) { Forge::Lexer.new("\"abc").tokenize }
+    assert_match(/Unterminated string/, err.message)
+  end
+
+  def test_import_keyword
+    tokens = Forge::Lexer.new("import").tokenize
+    assert_equal :KEYWORD, tokens[0].type
+    assert_equal "import", tokens[0].value
+  end
+
+  def test_map_keyword
+    tokens = Forge::Lexer.new("map").tokenize
+    assert_equal :KEYWORD, tokens[0].type
+    assert_equal "map", tokens[0].value
+  end
 end
