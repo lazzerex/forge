@@ -3,7 +3,7 @@
 <p align="center">
   <strong>Schema language for code generation</strong><br />
   Define messages with typed fields in a language-agnostic schema,
-  then generate Haxe, TypeScript, and more from the same source.
+  then generate Haxe, TypeScript, Go, and Rust from the same source.
 </p>
 
 <p align="center">
@@ -15,6 +15,7 @@
   <img src="https://img.shields.io/badge/Target-Haxe-FF681F?logo=haxe&logoColor=white" alt="Haxe" />
   <img src="https://img.shields.io/badge/Target-TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Target-Go-00ADD8?logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Target-Rust-DEA584?logo=rust&logoColor=black" alt="Rust" />
 </p>
 
 <p align="center">
@@ -35,8 +36,9 @@
 | [**Built-in Types**](#built-in-types) | [**Semantic Analyzer**](#semantic-analyzer) |
 | [**Grammar**](#grammar) | [**Symbol Table**](#symbol-table) |
 | [**Haxe Generator**](#haxe-generator) | [**TypeScript Generator**](#typescript-generator) |
-| [**Go Generator**](#go-generator) | [**CLI**](#cli) |
-| [**Project Structure**](#project-structure) | [**Testing**](#testing) |
+| [**Go Generator**](#go-generator) | [**Rust Generator**](#rust-generator) |
+| [**CLI**](#cli) | [**Project Structure**](#project-structure) |
+| [**Testing**](#testing) | |
 
 ---
 
@@ -45,6 +47,8 @@
 Forge defines messages with typed fields, and enums for closed value sets:
 
 ```
+import "common.forge";
+
 message User {
     string id;
     string name;
@@ -52,6 +56,9 @@ message User {
     bool active;
     Status status;
     Post latest_post;
+    string[] tags;
+    map<string, int> scores;
+    int optional_age?;
 }
 
 enum Status {
@@ -67,8 +74,12 @@ message Post {
 Each message has a name and zero or more fields. Every field has a type and a
 name, terminated by a semicolon. A field type may be a built-in type, the name
 of another message, or the name of an enum — references may point forward.
-Enums list their values as identifiers terminated by semicolons. Comments use
-`//` and are ignored by the lexer.
+Arrays use `Type[]`, maps use `map<Key, Value>` with `string` or `int` keys,
+and a trailing `?` marks a field optional. `import "path.forge";` includes
+declarations from another schema file; paths resolve relative to the importing
+file and imported types merge into the same namespace. Enums list their values
+as identifiers terminated by semicolons. Comments use `//` and are ignored by
+the lexer.
 
 ### Built-in Types
 
@@ -86,7 +97,7 @@ Enums list their values as identifiers terminated by semicolons. Comments use
 Forge is a multi-phase compiler frontend. Each phase has a single responsibility:
 
 ```
-Source → Lexer → Tokens → Parser → AST → Semantic Analysis → Generators → Haxe Source | TypeScript Source | Go Source
+Source → Lexer → Tokens → Parser → AST → Semantic Analysis → Generators → Haxe Source | TypeScript Source | Go Source | Rust Source
 ```
 
 ### Lexer
@@ -96,10 +107,15 @@ source locations (line, column). Reports errors with exact positions.
 
 | Token Type | Examples |
 |-----------|----------|
-| `KEYWORD` | `message`, `enum` |
+| `KEYWORD` | `message`, `enum`, `import`, `map` |
 | `TYPE` | `string`, `int`, `float`, `bool` |
 | `IDENTIFIER` | `User`, `name`, `age` |
+| `STRING` | `"common.forge"` |
 | `LBRACE` / `RBRACE` | `{` / `}` |
+| `LBRACKET` / `RBRACKET` | `[` / `]` |
+| `LT` / `GT` | `<` / `>` |
+| `COMMA` | `,` |
+| `QUESTION` | `?` |
 | `SEMICOLON` | `;` |
 | `EOF` | end of input |
 
@@ -111,8 +127,9 @@ identifier as a field type and leaves type validation to the semantic analyzer.
 
 ### AST
 
-Four node types — `Document` (root, contains messages and enums), `Message`
-(name + fields), `Field` (type name + field name), and `Enum` (name + values).
+Node types — `Document` (root: messages, enums, imports), `Message`
+(name + fields), `Field` (type + name + optional flag), `FieldType` (named,
+array, or map), `Enum` (name + values), and `Import` (path + location).
 All nodes carry source locations. The AST is intentionally language-independent
 so that multiple code generators can consume the same parse tree.
 
@@ -140,6 +157,7 @@ schema.forge:12:9: duplicate field `name`
 | Duplicate type (enum vs message/enum) | `duplicate type \`Status\`` |
 | Duplicate enum value | `duplicate enum value \`ACTIVE\`` |
 | Empty enum | `enum \`Status\` has no values` |
+| Invalid map key | map key must be string or int |
 
 ### Symbol Table
 
@@ -156,12 +174,15 @@ so forward references between messages and enums work in any declaration order.
 ### Grammar
 
 ```
-document      := (message_declaration | enum_declaration)*
+document      := (import_declaration | message_declaration | enum_declaration)*
+import        := 'import' STRING ';'
 message       := 'message' IDENTIFIER '{' field* '}'
-field         := TYPE IDENTIFIER ';'
+field         := field_type IDENTIFIER '?'? ';'
+field_type    := base_type ('[' ']')* | 'map' '<' base_type ',' base_type '>' ('[' ']')*
+base_type     := TYPE | IDENTIFIER
 enum          := 'enum' IDENTIFIER '{' enum_value* '}'
 enum_value    := IDENTIFIER ';'
-TYPE          := 'string' | 'int' | 'float' | 'bool' | IDENTIFIER
+TYPE          := 'string' | 'int' | 'float' | 'bool'
 ```
 
 ---
@@ -202,6 +223,9 @@ class User {
 | `int` | `Int` |
 | `float` | `Float` |
 | `bool` | `Bool` |
+| `T?` | `Null<T>` |
+| `T[]` | `Array<T>` |
+| `map<K, V>` | `Map<K, V>` |
 
 Message- and enum-typed fields are emitted by name (`public var author:User;`).
 Enums become Haxe enum abstracts over `String`:
@@ -213,9 +237,9 @@ enum abstract Status(String) {
 }
 ```
 
-The generator is built behind a `Generator` base class. The TypeScript and Go
-generators subclass it, and future targets (Rust) can do the same, providing
-their own type mappings and output format without modifying the parser or AST.
+The generator is built behind a `Generator` base class. The TypeScript, Go,
+and Rust generators subclass it, providing their own type mappings and output
+format without modifying the parser or AST.
 
 ---
 
@@ -250,6 +274,9 @@ export interface User {
 | `int` | `number` |
 | `float` | `number` |
 | `bool` | `boolean` |
+| `T?` | `name?: T` |
+| `T[]` | `T[]` |
+| `map<K, V>` | `{ [key: K]: V }` |
 
 Output is idiomatic TypeScript (`export interface`), not a mechanical
 translation of the Haxe output. The same AST drives both generators; only
@@ -298,6 +325,9 @@ type User struct {
 | `int` | `int` |
 | `float` | `float64` |
 | `bool` | `bool` |
+| `T?` | `*T` with `json:"name,omitempty"` |
+| `T[]` | `[]T` |
+| `map<K, V>` | `map[K]V` |
 
 Fields are exported (first letter capitalized) and carry JSON tags matching
 the schema field names. Message- and enum-typed fields use the referenced type
@@ -316,6 +346,48 @@ The package clause is currently fixed to `package schema`.
 
 ---
 
+## Rust Generator
+
+Fourth code-generation target. Same AST, same pipeline — only the generator
+class knows Rust.
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Status {
+    Active,
+    Inactive,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct User {
+    pub id: String,
+    pub name: String,
+    pub age: i32,
+    pub active: bool,
+    pub status: Status,
+    pub tags: Vec<String>,
+    pub scores: std::collections::HashMap<String, i32>,
+    pub optional_age: Option<i32>,
+}
+```
+
+### Type Mapping
+
+| Forge | Rust |
+|-------|------|
+| `string` | `String` |
+| `int` | `i32` |
+| `float` | `f64` |
+| `bool` | `bool` |
+| `T?` | `Option<T>` |
+| `T[]` | `Vec<T>` |
+| `map<K, V>` | `std::collections::HashMap<K, V>` |
+
+Message- and enum-typed fields use the referenced type name directly. Enum
+values become CamelCase variants (`ACTIVE` → `Active`).
+
+---
+
 ## CLI
 
 The Forge release includes a command-line executable. The compiler pipeline
@@ -328,6 +400,7 @@ forge generate schema.forge --target haxe
 forge generate schema.forge --target haxe --out generated/
 forge generate schema.forge --target typescript --out generated/
 forge generate schema.forge --target go --out generated/
+forge generate schema.forge --target rust --out generated/
 
 forge version
 forge help
@@ -339,8 +412,8 @@ Behavior:
   for lexer, parser, and semantic errors with source locations.
 * `generate` validates first. No files are written when validation fails.
 * With `--out`, writes one file per message and per enum (`User.hx`,
-  `User.ts`, `User.go`, `Status.ts`). Without it, prints generated code
-  to stdout.
+  `User.ts`, `User.go`, `User.rs`, `Status.ts`). Without it, prints
+  generated code to stdout.
 * Exit code `0` on success, `1` on any error.
 
 ---
@@ -348,21 +421,26 @@ Behavior:
 ## Project Structure
 
 ```
+exe/
+  forge                       # Executable binstub
+forge.gemspec                 # Gem packaging
 lib/
   forge.rb                    # Main entry point
   forge/
     cli.rb                    # Command-line interface
-    errors.rb                 # LexerError, ParserError, SemanticError
+    errors.rb                 # LexerError, ParserError, SemanticError, LoaderError
     token.rb                  # Token struct
     lexer.rb                  # Hand-written lexer
     ast.rb                    # AST node classes
     parser.rb                 # Recursive-descent parser
+    loader.rb                 # Multi-file schema loader with imports
     semantic_analyzer.rb      # Semantic analysis + symbol table
     generator.rb              # Base generator abstraction
     generators/
       haxe.rb                 # Haxe code generator
       typescript.rb           # TypeScript code generator
       go.rb                   # Go code generator
+      rust.rb                 # Rust code generator
     verify.rb                 # Compile-check generated Haxe
     version.rb                # Version constant
 runtime/
@@ -377,6 +455,8 @@ test/
   generator_test.rb           # Haxe generator tests
   typescript_test.rb          # TypeScript generator tests
   go_test.rb                  # Go generator tests
+  rust_test.rb                # Rust generator tests
+  import_test.rb              # Multi-file import tests
   cli_test.rb                 # CLI tests
   integration_test.rb         # Haxe compilation integration tests
 ```
@@ -395,9 +475,9 @@ Each phase includes its own test file. Lexer and parser tests cover both
 happy paths and error cases (malformed input, missing braces, missing
 semicolons, invalid declarations). Generator tests include end-to-end
 tests that run the full pipeline from source to generated output for the
-Haxe, TypeScript, and Go targets.
+Haxe, TypeScript, Go, and Rust targets.
 
-CLI tests cover `check` and `generate` for all three targets: exit codes,
+CLI tests cover `check` and `generate` for all four targets: exit codes,
 diagnostics, file writing, and the guarantee that no files are written
 when validation fails.
 
@@ -416,6 +496,19 @@ bundle exec rake verify[schema.forge]
 This runs the full pipeline (lexer → parser → semantic analysis → Haxe
 generator), writes the output to a temp directory, compiles with
 `haxe --interp`, and exits 0 on success, 1 on failure.
+
+### Gem packaging
+
+```bash
+gem build forge.gemspec
+gem install ./forge-0.1.0.gem
+forge version
+```
+
+CI runs each test file as its own named step with Minitest's verbose
+reporter, then builds the gem, installs it, smoke-tests the `forge`
+executable, and compile-checks the generated TypeScript (`tsc --noEmit`),
+Go (`go vet`), and Rust (`rustc --crate-type lib`) output.
 
 ---
 
