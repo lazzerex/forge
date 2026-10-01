@@ -27,9 +27,20 @@ module Forge
     end
 
     def generate_field(field)
-      go_type = TYPE_MAP[field.type_name] || field.type_name
+      go_type = go_type(field.type, field.optional)
       exported = field.name[0].upcase + field.name[1..]
-      "    #{exported} #{go_type} `json:\"#{field.name}\"`"
+      tag = field.optional ? "#{field.name},omitempty" : field.name
+      "    #{exported} #{go_type} `json:\"#{tag}\"`"
+    end
+
+    def go_type(type, optional)
+      case type.kind
+      when :array then "[]#{go_type(type.element, false)}"
+      when :map then "map[#{go_type(type.key_type, false)}]#{go_type(type.value_type, false)}"
+      else
+        base = TYPE_MAP[type.name] || type.name
+        optional ? "*#{base}" : base
+      end
     end
 
     def generate_enum(enum)
