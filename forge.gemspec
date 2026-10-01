@@ -8,8 +8,6 @@ Gem::Specification.new do |spec|
   spec.description = "Define messages with typed fields in a language-agnostic schema, then generate Haxe, TypeScript, Go, and Rust from the same source."
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0"
-  spec.files = Dir["lib/**/*.rb", "runtime/**/*", "exe/*", "README.md"]
-  spec.bindir = "exe"
-  spec.executables = ["forge"]
+  spec.files = Dir["lib/**/*.rb", "runtime/**/*", "README.md"]
   spec.require_paths = ["lib"]
 end
