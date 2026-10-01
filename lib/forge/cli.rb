@@ -5,7 +5,8 @@ module Forge
     TARGETS = {
       "haxe" => { generator: HaxeGenerator, ext: "hx" },
       "typescript" => { generator: TypeScriptGenerator, ext: "ts" },
-      "go" => { generator: GoGenerator, ext: "go" }
+      "go" => { generator: GoGenerator, ext: "go" },
+      "rust" => { generator: RustGenerator, ext: "rs" }
     }.freeze
 
     def initialize(argv, stdout: $stdout, stderr: $stderr)
@@ -111,15 +112,10 @@ module Forge
     end
 
     def compile(filename)
-      source = File.read(filename)
-      tokens = Lexer.new(source).tokenize
-      doc = Parser.new(tokens).parse
+      doc = Loader.load(filename)
       errors = SemanticAnalyzer.new(filename).analyze(doc)
       [doc, errors]
-    rescue Errno::ENOENT
-      @stderr.puts "File not found: #{filename}"
-      [nil, []]
-    rescue LexerError, ParserError => e
+    rescue LoaderError, LexerError, ParserError => e
       @stderr.puts e.message
       [nil, []]
     end
