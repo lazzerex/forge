@@ -1,6 +1,7 @@
 module Forge
   class LexerError < StandardError; end
   class ParserError < StandardError; end
+  class LoaderError < StandardError; end
   class SemanticError < StandardError
     attr_reader :line, :column, :filename
 
