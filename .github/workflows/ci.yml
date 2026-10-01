@@ -19,22 +19,98 @@ jobs:
         with:
           haxe-version: 4.3.3
 
-      - name: Run tests
-        run: bundle exec rake test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Version tests
+        run: bundle exec ruby test/forge_test.rb --verbose
+
+      - name: Lexer tests
+        run: bundle exec ruby test/lexer_test.rb --verbose
+
+      - name: Parser tests
+        run: bundle exec ruby test/parser_test.rb --verbose
+
+      - name: Semantic analyzer tests
+        run: bundle exec ruby test/semantic_analyzer_test.rb --verbose
+
+      - name: Haxe generator tests
+        run: bundle exec ruby test/generator_test.rb --verbose
+
+      - name: TypeScript generator tests
+        run: bundle exec ruby test/typescript_test.rb --verbose
+
+      - name: Go generator tests
+        run: bundle exec ruby test/go_test.rb --verbose
+
+      - name: Rust generator tests
+        run: bundle exec ruby test/rust_test.rb --verbose
+
+      - name: CLI tests
+        run: bundle exec ruby test/cli_test.rb --verbose
+
+      - name: Import tests
+        run: bundle exec ruby test/import_test.rb --verbose
+
+      - name: Haxe integration tests
+        run: bundle exec ruby test/integration_test.rb --verbose
+
+      - name: Gem build
+        run: gem build forge.gemspec
+
+      - name: Install gem
+        run: gem install ./forge-*.gem
 
       - name: CLI smoke
         run: |
-          forge() { ruby -Ilib -r forge -e 'exit Forge::CLI.new(ARGV).run' "$@"; }
+          forge version
           cat > /tmp/ci_smoke.forge <<'EOF'
+          enum Status {
+              ACTIVE;
+              INACTIVE;
+          }
+
           message User {
               string id;
               string name;
               int age;
               bool active;
+              Status status;
+              string[] tags;
+              map<string, int> scores;
+              int optional_age?;
           }
           EOF
           forge check /tmp/ci_smoke.forge
           forge generate /tmp/ci_smoke.forge --target haxe --out /tmp/ci_gen_hx
           forge generate /tmp/ci_smoke.forge --target typescript --out /tmp/ci_gen_ts
+          forge generate /tmp/ci_smoke.forge --target go --out /tmp/ci_gen_go
+          forge generate /tmp/ci_smoke.forge --target rust --out /tmp/ci_gen_rs
           test -f /tmp/ci_gen_hx/User.hx
           test -f /tmp/ci_gen_ts/User.ts
+          test -f /tmp/ci_gen_go/User.go
+          test -f /tmp/ci_gen_rs/User.rs
+
+      - name: Verify generated TypeScript compiles
+        run: |
+          forge generate /tmp/ci_smoke.forge --target typescript > /tmp/ci_schema.ts
+          npm install --no-save typescript@5
+          ./node_modules/.bin/tsc --noEmit --strict /tmp/ci_schema.ts
+
+      - name: Verify generated Go compiles
+        run: |
+          cd /tmp/ci_gen_go
+          go mod init schema
+          go vet .
+
+      - name: Verify generated Rust compiles
+        run: |
+          forge generate /tmp/ci_smoke.forge --target rust > /tmp/ci_schema.rs
+          rustc --edition 2021 --crate-type lib -o /tmp/libschema.rlib /tmp/ci_schema.rs
