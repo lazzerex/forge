@@ -4,8 +4,26 @@ on:
   push:
   pull_request:
 
+env:
+  SMOKE_SCHEMA: |
+    enum Status {
+        ACTIVE;
+        INACTIVE;
+    }
+
+    message User {
+        string id;
+        string name;
+        int age;
+        bool active;
+        Status status;
+        string[] tags;
+        map<string, int> scores;
+        int optional_age?;
+    }
+
 jobs:
-  test:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,16 +36,6 @@ jobs:
       - uses: krdlab/setup-haxe@v1
         with:
           haxe-version: 4.3.3
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.22"
-
-      - uses: dtolnay/rust-toolchain@stable
 
       - name: Version tests
         run: bundle exec ruby test/forge_test.rb --verbose
@@ -62,33 +70,27 @@ jobs:
       - name: Haxe integration tests
         run: bundle exec ruby test/integration_test.rb --verbose
 
-      - name: Gem build
-        run: gem build forge.gemspec
+  gem:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Install gem
-        run: gem install ./forge-*.gem
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Build and install gem
+        run: |
+          gem build forge.gemspec
+          gem install ./forge-*.gem
+          echo "$(ruby -e 'print Gem.bindir')" >> "$GITHUB_PATH"
 
       - name: CLI smoke
         run: |
+          printf '%s' "$SMOKE_SCHEMA" > /tmp/ci_smoke.forge
           forge() { ruby -Ilib -r forge -e 'exit Forge::CLI.new(ARGV).run' "$@"; }
           forge version
-          cat > /tmp/ci_smoke.forge <<'EOF'
-          enum Status {
-              ACTIVE;
-              INACTIVE;
-          }
-
-          message User {
-              string id;
-              string name;
-              int age;
-              bool active;
-              Status status;
-              string[] tags;
-              map<string, int> scores;
-              int optional_age?;
-          }
-          EOF
           forge check /tmp/ci_smoke.forge
           forge generate /tmp/ci_smoke.forge --target haxe --out /tmp/ci_gen_hx
           forge generate /tmp/ci_smoke.forge --target typescript --out /tmp/ci_gen_ts
@@ -99,19 +101,63 @@ jobs:
           test -f /tmp/ci_gen_go/User.go
           test -f /tmp/ci_gen_rs/User.rs
 
-      - name: Verify generated TypeScript compiles
+  verify-typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Compile generated TypeScript
         run: |
-          forge generate /tmp/ci_smoke.forge --target typescript > /tmp/ci_schema.ts
+          printf '%s' "$SMOKE_SCHEMA" > /tmp/ci_smoke.forge
+          ruby -Ilib -r forge -e 'exit Forge::CLI.new(ARGV).run' generate /tmp/ci_smoke.forge --target typescript > /tmp/ci_schema.ts
           npm install --no-save typescript@5
           ./node_modules/.bin/tsc --noEmit --strict /tmp/ci_schema.ts
 
-      - name: Verify generated Go compiles
+  verify-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Compile generated Go
         run: |
+          printf '%s' "$SMOKE_SCHEMA" > /tmp/ci_smoke.forge
+          ruby -Ilib -r forge -e 'exit Forge::CLI.new(ARGV).run' generate /tmp/ci_smoke.forge --target go --out /tmp/ci_gen_go
           cd /tmp/ci_gen_go
           go mod init schema
           go vet .
 
-      - name: Verify generated Rust compiles
+  verify-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Compile generated Rust
         run: |
-          forge generate /tmp/ci_smoke.forge --target rust > /tmp/ci_schema.rs
+          printf '%s' "$SMOKE_SCHEMA" > /tmp/ci_smoke.forge
+          ruby -Ilib -r forge -e 'exit Forge::CLI.new(ARGV).run' generate /tmp/ci_smoke.forge --target rust > /tmp/ci_schema.rs
           rustc --edition 2021 --crate-type lib -o /tmp/libschema.rlib /tmp/ci_schema.rs
