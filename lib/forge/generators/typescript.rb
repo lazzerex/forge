@@ -21,8 +21,21 @@ module Forge
       if message.fields.empty?
         "export interface #{message.name} {\n}"
       else
-        fields = message.fields.map { |f| "    #{f.name}: #{TYPE_MAP[f.type_name] || f.type_name};" }.join("\n")
+        fields = message.fields.map { |f| "    #{ts_field(f)}" }.join("\n")
         "export interface #{message.name} {\n#{fields}\n}"
+      end
+    end
+
+    def ts_field(field)
+      optional = field.optional ? "?" : ""
+      "#{field.name}#{optional}: #{ts_type(field.type)};"
+    end
+
+    def ts_type(type)
+      case type.kind
+      when :array then "#{ts_type(type.element)}[]"
+      when :map then "{ [key: #{ts_type(type.key_type)}]: #{ts_type(type.value_type)} }"
+      else TYPE_MAP[type.name] || type.name
       end
     end
 
