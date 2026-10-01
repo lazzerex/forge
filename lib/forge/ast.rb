@@ -1,10 +1,45 @@
 module Forge
   class Document
-    attr_reader :messages, :enums
+    attr_reader :messages, :enums, :imports
 
-    def initialize(messages, enums = [])
+    def initialize(messages, enums = [], imports = [])
       @messages = messages
       @enums = enums
+      @imports = imports
+    end
+  end
+
+  class Import
+    attr_reader :path, :line, :column
+
+    def initialize(path:, line:, column:)
+      @path = path
+      @line = line
+      @column = column
+    end
+  end
+
+  class FieldType
+    attr_reader :kind, :name, :element, :key_type, :value_type
+
+    def initialize(kind:, name:, element: nil, key_type: nil, value_type: nil)
+      @kind = kind
+      @name = name
+      @element = element
+      @key_type = key_type
+      @value_type = value_type
+    end
+
+    def named?
+      @kind == :named
+    end
+
+    def array?
+      @kind == :array
+    end
+
+    def map?
+      @kind == :map
     end
   end
 
@@ -20,13 +55,18 @@ module Forge
   end
 
   class Field
-    attr_reader :name, :type_name, :line, :column
+    attr_reader :name, :type, :optional, :line, :column
 
-    def initialize(name:, type_name:, line:, column:)
+    def initialize(name:, type:, optional: false, line:, column:)
       @name = name
-      @type_name = type_name
+      @type = type
+      @optional = optional
       @line = line
       @column = column
+    end
+
+    def type_name
+      @type.name
     end
   end
 
