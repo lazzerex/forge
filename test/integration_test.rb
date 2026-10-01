@@ -297,4 +297,34 @@ class HaxeIntegrationTest < Minitest::Test
   ensure
     $stderr = old
   end
+
+  def test_optional_array_map_compile
+    Dir.mktmpdir do |dir|
+      haxe = generate_haxe(<<~FORGE)
+        message User {
+          string name;
+          int age?;
+          string[] tags;
+          map<string, int> scores;
+        }
+      FORGE
+      File.write("#{dir}/User.hx", haxe)
+      File.write("#{dir}/Main.hx", <<~HAXE)
+        class Main {
+            static function main() {
+                var user = new User();
+                user.name = "alice";
+                user.age = 30;
+                user.tags = ["a", "b"];
+                user.scores = ["math" => 95];
+                trace(user.name);
+                trace(user.age);
+                trace(user.tags.length);
+                trace(user.scores.get("math"));
+            }
+        }
+      HAXE
+      assert compile_and_run(dir), "Optional/array/map schema failed"
+    end
+  end
 end
