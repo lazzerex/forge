@@ -107,13 +107,7 @@ module Forge
       seen_fields = {}
 
       message.fields.each do |field|
-        unless @symbol_table.known_type?(field.type_name)
-          @errors << error(
-            "unknown type `#{field.type_name}`",
-            line: field.line,
-            column: field.column
-          )
-        end
+        check_type(field.type, field)
 
         if seen_fields.key?(field.name)
           @errors << error(
@@ -123,6 +117,30 @@ module Forge
           )
         end
         seen_fields[field.name] = true
+      end
+    end
+
+    def check_type(type, field)
+      case type.kind
+      when :named
+        unless @symbol_table.known_type?(type.name)
+          @errors << error(
+            "unknown type `#{type.name}`",
+            line: field.line,
+            column: field.column
+          )
+        end
+      when :array
+        check_type(type.element, field)
+      when :map
+        unless %w[string int].include?(type.key_type.name)
+          @errors << error(
+            "map key must be `string` or `int`, got `#{type.key_type.name}`",
+            line: field.line,
+            column: field.column
+          )
+        end
+        check_type(type.value_type, field)
       end
     end
 
