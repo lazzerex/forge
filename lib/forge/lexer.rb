@@ -2,7 +2,7 @@ require_relative "token"
 
 module Forge
   class Lexer
-    KEYWORDS = { "message" => :KEYWORD, "enum" => :KEYWORD }.freeze
+    KEYWORDS = { "message" => :KEYWORD, "enum" => :KEYWORD, "import" => :KEYWORD, "map" => :KEYWORD }.freeze
     TYPES = %w[string int float bool].freeze
 
     def initialize(source)
@@ -74,11 +74,36 @@ module Forge
         Token.new(type: :RBRACE, value: "}", line: start_line, column: start_col)
       when ";"
         Token.new(type: :SEMICOLON, value: ";", line: start_line, column: start_col)
+      when "?"
+        Token.new(type: :QUESTION, value: "?", line: start_line, column: start_col)
+      when "["
+        Token.new(type: :LBRACKET, value: "[", line: start_line, column: start_col)
+      when "]"
+        Token.new(type: :RBRACKET, value: "]", line: start_line, column: start_col)
+      when "<"
+        Token.new(type: :LT, value: "<", line: start_line, column: start_col)
+      when ">"
+        Token.new(type: :GT, value: ">", line: start_line, column: start_col)
+      when ","
+        Token.new(type: :COMMA, value: ",", line: start_line, column: start_col)
+      when "\""
+        scan_string(start_line, start_col)
       when /[a-zA-Z_]/
         scan_word(ch, start_line, start_col)
       else
         raise Forge::LexerError, "Unexpected character '#{ch}' at #{start_line}:#{start_col}"
       end
+    end
+
+    def scan_string(start_line, start_col)
+      buf = +""
+      while !at_end? && peek != "\""
+        raise Forge::LexerError, "Unterminated string at #{start_line}:#{start_col}" if peek == "\n"
+        buf << advance
+      end
+      raise Forge::LexerError, "Unterminated string at #{start_line}:#{start_col}" if at_end?
+      advance
+      Token.new(type: :STRING, value: buf, line: start_line, column: start_col)
     end
 
     def scan_word(first_char, start_line, start_col)
