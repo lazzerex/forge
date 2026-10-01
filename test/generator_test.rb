@@ -197,4 +197,24 @@ class HaxeGeneratorTest < Minitest::Test
     assert_includes output, "enum abstract Status(String) {"
     assert_includes output, "public var status:Status;"
   end
+
+  def test_optional_field
+    output = generate("message User { int age?; }")
+    assert_includes output, "public var age:Null<Int>;"
+  end
+
+  def test_array_field
+    output = generate("message User { string[] tags; }")
+    assert_includes output, "public var tags:Array<String>;"
+  end
+
+  def test_map_field
+    output = generate("message User { map<string, int> scores; }")
+    assert_includes output, "public var scores:Map<String, Int>;"
+  end
+
+  def test_optional_array_field
+    output = generate("message User { string[] tags?; }")
+    assert_includes output, "public var tags:Null<Array<String>>;"
+  end
 end
