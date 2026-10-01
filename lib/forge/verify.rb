@@ -10,9 +10,7 @@ module Forge
     end
 
     def run
-      source = File.read(@filename)
-      tokens = Lexer.new(source).tokenize
-      doc = Parser.new(tokens).parse
+      doc = Loader.load(@filename)
       errors = SemanticAnalyzer.new(@filename).analyze(doc)
 
       unless errors.empty?
@@ -44,7 +42,8 @@ module Forge
       return simple_main if msg.nil? || msg.fields.empty?
 
       varname = msg.name.downcase
-      assignments = msg.fields.map { |f| "#{varname}.#{f.name} = #{default_value(f)};" }.join("\n")
+      assignable = msg.fields.reject { |f| f.type.array? || f.type.map? }
+      assignments = assignable.map { |f| "#{varname}.#{f.name} = #{default_value(f)};" }.join("\n")
       traces = msg.fields.map { |f| "trace(Std.string(#{varname}.#{f.name}));" }.join("\n")
 
       <<~HAXE
