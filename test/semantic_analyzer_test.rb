@@ -330,4 +330,50 @@ class SemanticAnalyzerTest < Minitest::Test
     assert_equal 1, errors.length
     assert_match(/enum `Status` has no values/, errors[0].message)
   end
+
+  def test_array_of_unknown_type
+    errors = analyze("message User { Unknown[] items; }")
+    assert_equal 1, errors.length
+    assert_match(/unknown type `Unknown`/, errors[0].message)
+  end
+
+  def test_map_with_string_key_valid
+    errors = analyze("message User { map<string, int> scores; }")
+    assert_equal 0, errors.length
+  end
+
+  def test_map_with_int_key_valid
+    errors = analyze("message User { map<int, string> names; }")
+    assert_equal 0, errors.length
+  end
+
+  def test_map_with_bool_key_invalid
+    errors = analyze("message User { map<bool, int> scores; }")
+    assert_equal 1, errors.length
+    assert_match(/map key must be `string` or `int`/, errors[0].message)
+  end
+
+  def test_map_with_message_key_invalid
+    errors = analyze("message Post { }
+message User { map<Post, int> scores; }")
+    assert_equal 1, errors.length
+    assert_match(/map key must be/, errors[0].message)
+  end
+
+  def test_map_with_unknown_value_type
+    errors = analyze("message User { map<string, Unknown> scores; }")
+    assert_equal 1, errors.length
+    assert_match(/unknown type `Unknown`/, errors[0].message)
+  end
+
+  def test_optional_field_valid
+    errors = analyze("message User { int age?; string name; }")
+    assert_equal 0, errors.length
+  end
+
+  def test_array_of_message_valid
+    errors = analyze("message Post { string title; }
+message User { Post[] posts; }")
+    assert_equal 0, errors.length
+  end
 end
